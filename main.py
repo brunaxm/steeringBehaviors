@@ -1,114 +1,133 @@
 import numpy as np
 from panda3d.core import Vec3
-from direct.directbase.DirectStart import *
+from direct.showbase.ShowBase import ShowBase
 from direct.showbase.DirectObject import DirectObject
 from direct.task import Task
 from direct.actor.Actor import Actor
-from panda3d.ai import AIWorld, AICharacter
 
 class World(DirectObject):
 
     def __init__(self):
+        base = ShowBase() 
         base.disableMouse()
         base.cam.setPosHpr(0, 0, 55, 0, -90, 0)
 
         self.loadModels()
-        self.setAI()
         self.setBioCrowds()
 
     def loadModels(self):
-        # Seeker
-        ralphStartPos = Vec3(-10, 0, 0)
-        self.seeker = Actor("ralph", {"run": "ralph-run"})
-        self.seeker.reparentTo(render)
-        self.seeker.setScale(0.5)
-        self.seeker.setPos(ralphStartPos)
-        # Target
-        self.target = loader.loadModel("ball")
-        self.target.setColor(1, 0, 0)
-        self.target.setPos(5, 0, 0)
-        self.target.setScale(1)
+        
+        self.target = loader.loadModel("models/ball")  
+        self.target.setColor(0, 0, 10)
+        self.target.setPos(10, 0, 0)
+        self.target.setScale(3)
         self.target.reparentTo(render)
 
-    def setAI(self):
-        # Creating AI World
-        self.AIworld = AIWorld(render)
-
-        self.AIchar = AICharacter("seeker", self.seeker, 100, 0.05, 5)
-        self.AIworld.addAiChar(self.AIchar)
-        self.AIbehaviors = self.AIchar.getAiBehaviors()
-
-        self.AIbehaviors.seek(self.target)
-        self.seeker.loop("run")
-
-        # AI World update        
-        taskMgr.add(self.AIUpdate, "AIUpdate")
-
-    def AIUpdate(self, task):
-        self.AIworld.update()
-        return Task.cont
+    
+        self.obstacles = []
+        for i in range(4): 
+            obstacle = loader.loadModel("models/box")
+            obstacle.setColor(1, 1, 1) 
+            obstacle.setScale(1.5)
+            obstacle.setPos(-3, 5.5 * (i - 1), 0) 
+            obstacle.reparentTo(render)
+            self.obstacles.append(obstacle)       
 
     def setBioCrowds(self):
-        self.bioCrowds = []  # List to keep track of biocrowds agents
+        self.bioCrowds = []  
         self.createBioCrowdsAgents()
 
-        # Add biocrowds update task
         taskMgr.add(self.BioCrowdsUpdate, "BioCrowdsUpdate")
 
     def createBioCrowdsAgents(self):
-        for i in range(10):  # Assuming we have 10 biocrowds agents
-            agent = loader.loadModel("ralph")
-            agent.setPos(Vec3(-15 + i, 0, 0))  # Example starting positions
+        num_agents = 50 
+        for i in range(num_agents):  
+            agent = Actor("models/ralph", {"walk": "models/ralph-run"}) 
+     
+            agent.setPos(Vec3(np.random.uniform(-20, -10), np.random.uniform(-10, 10), 0))
+            agent.setScale(0.5)
             agent.reparentTo(render)
             self.bioCrowds.append(agent)
+            agent.loop("walk") 
 
     def BioCrowdsUpdate(self, task):
-        # Convert agents to numpy arrays for easier calculation
-        agent_positions = np.array([list(agent.getPos()) for agent in self.bioCrowds])
         new_positions = []
+        agent_radius = 0.8 
 
-        # Parameters
+       
         FPS = 30
-        Smax = 10  # Example value
-        R = 5      # Interaction radius
-        s_imax = 5 # Maximum speed
+        Smax = 1.0 
+        R = 3.0    
+        s_imax = 1.0 
 
-        # Convert Smax to per frame value
+       
         Smax = Smax / FPS
 
-        for i, agent in enumerate(self.bioCrowds):
-            # Initialize Si for each agent
-            Si = []
+        for agent in self.bioCrowds:
+            
             pi = np.array(agent.getPos())
+            avoidance_vector = np.zeros(3)
+            pursuit_vector = np.zeros(3)
 
-            for a in self.bioCrowds:
-                if a != agent:
-                    ai = np.array(a.getPos())
-                    distance = np.linalg.norm(pi - ai)
+           
+            for obstacle in self.obstacles:
+                obstacle_pos = np.array(obstacle.getPos())
+                distance = np.linalg.norm(pi - obstacle_pos)
+                if distance < R:
+                    
+                    evasion_direction = pi - obstacle_pos
+                    if np.linalg.norm(evasion_direction) > 0:
+                        evasion_direction = evasion_direction / np.linalg.norm(evasion_direction)
+                    avoidance_vector += evasion_direction * (R - distance) / R 
 
-                    if distance <= R:
-                        Si.append(a)
+         
+            if np.linalg.norm(avoidance_vector) > 0:
+                avoidance_vector = avoidance_vector / np.linalg.norm(avoidance_vector) * Smax
 
-            if Si:
-                Si = [np.array(a.getPos()) - pi for a in Si]
-                distances = np.linalg.norm(Si, axis=1)
-                weights = 1 / distances
-                weighted_directions = np.sum(weights[:, np.newaxis] * Si, axis=0)
-                norm_weighted_directions = np.linalg.norm(weighted_directions)
+          
+            target_pos = np.array(self.target.getPos())
+            direction_to_target = target_pos - pi
+            distance_to_target = np.linalg.norm(direction_to_target)
 
-                s_min = min(norm_weighted_directions, s_imax)
-                if norm_weighted_directions > 0:
-                    vi = (weighted_directions / norm_weighted_directions) * s_min
-                else:
-                    vi = np.zeros_like(weightedirections)
+            if distance_to_target > 0:
+                direction_to_target = direction_to_target / distance_to_target
+                pursuit_vector = direction_to_target * min(s_imax, Smax)
 
-                new_positions.append(pi + vi)
+            
+            final_vector = pursuit_vector + avoidance_vector
 
-        # Update agent positions
-        for agent, pos in zip(self.bioCrowds, new_positions):
+            
+            current_pos = np.array(agent.getPos())
+            smooth_vector = final_vector * 0.7 + (current_pos - pi) * 0.3
+            new_position = current_pos + smooth_vector
+
+           
+            new_positions.append(new_position)
+
+        
+        for i, (agent, pos) in enumerate(zip(self.bioCrowds, new_positions)):
+           
+            collision_detected = False
+            for obstacle in self.obstacles:
+                obstacle_pos = np.array(obstacle.getPos())
+                if np.linalg.norm(pos - obstacle_pos) < 1.5 * agent_radius: 
+                   
+                    pos = pos + (pos - obstacle_pos) / np.linalg.norm(pos - obstacle_pos) * agent_radius
+                    collision_detected = True
+            
+           
+            for j, other_agent in enumerate(self.bioCrowds):
+                if i != j:
+                    other_pos = np.array(other_agent.getPos())
+                    if np.linalg.norm(pos - other_pos) < 1.5 * agent_radius:  
+                        
+                        pos = pos + (pos - other_pos) / np.linalg.norm(pos - other_pos) * agent_radius
+                        collision_detected = True
+            
             agent.setPos(Vec3(*pos))
 
         return Task.cont
+
 
 w = World()
 run()
