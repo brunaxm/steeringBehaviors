@@ -126,10 +126,10 @@ class World(DirectObject):
                         collision_detected = True
             
             agent.setPos(Vec3(*pos))
-            if np.linalg.norm(pos - target_pos) < 2.0:  # Define threshold for reaching the target
-                agent.removeNode()  # Remove agent from the scene
-                self.bioCrowds.pop(i)  # Remove from the list
-                return Task.cont  # Stop processing this agent
+            if np.linalg.norm(pos - target_pos) < 2.0:  
+                agent.removeNode() 
+                self.bioCrowds.pop(i)  
+                return Task.cont 
         return Task.cont
 
 w = World()
