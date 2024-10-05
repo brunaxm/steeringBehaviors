@@ -129,7 +129,7 @@ class World(DirectObject):
 
     def isInBottleneck(self, position):
         # Verifica se a posição do agente está em uma área restrita (gargalo)
-        bottleneck_area = [(-5, -1), (-5, 1)]  # Exemplo de área do gargalo
+        bottleneck_area = [(-5, -1), (-5, 1)]  
         return bottleneck_area[0][0] < position[0] < bottleneck_area[1][0] and \
                bottleneck_area[0][1] < position[1] < bottleneck_area[1][1]
 
