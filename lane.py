@@ -62,8 +62,7 @@ class World(DirectObject):
         num_agents = 50 
         for i in range(num_agents):  
             agent = Actor("models/ralph", {"walk": "models/ralph-run"}) 
-            # Define lanes for agents
-            lane_position = np.random.randint(-5, 6)  # Random lane position
+            lane_position = np.random.randint(-5, 6)  
             agent.setPos(Vec3(np.random.uniform(-20, -10), lane_position, 0))
             agent.setScale(0.5)
             agent.reparentTo(render)
